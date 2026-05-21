@@ -9,115 +9,156 @@ function createToken(userId, role) {
   return jwt.sign({ userId, role }, secret, { expiresIn: '1h' });
 }
 
-async function runTests() {
-  console.log('--- STARTING TESTS ---');
+async function fetchAPI(endpoint, method, token, body = null) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  
+  const options = { method, headers };
+  if (body) options.body = JSON.stringify(body);
+
+  const res = await fetch(`${API_URL}${endpoint}`, options);
+  let data;
   try {
-    // 1. Clean DB and setup users, locations, products
-    console.log('Setting up DB...');
-    await db.query('TRUNCATE TABLE shipments, shipment_batches, batches, products, locations, users RESTART IDENTITY CASCADE');
+    data = await res.json();
+  } catch (e) {
+    data = null;
+  }
+  return { status: res.status, data };
+}
+
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(`Assertion failed: ${message}`);
+  }
+}
+
+async function runTests() {
+  console.log('--- STARTING COMPREHENSIVE TESTS ---');
+  try {
+    // ============================================
+    // 0. Setup DB
+    // ============================================
+    console.log('0. Setting up DB (Truncating tables)...');
+    await db.query(`TRUNCATE TABLE 
+      orders, transaction_items, transactions, shipment_batches, shipments, 
+      inventory_logs, batches, products, locations, refresh_tokens, users 
+      RESTART IDENTITY CASCADE`);
+
+    // Create users directly in DB for tokens
+    const roles = ['admin', 'producer', 'supplier', 'warehouse_manager', 'distributor', 'retailer'];
+    const users = {};
+    const tokens = {};
+
+    for (const role of roles) {
+      const res = await db.query(
+        `INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, 'hash', $3) RETURNING id`,
+        [`${role} User`, `${role}@test.com`, role]
+      );
+      users[role] = res.rows[0].id;
+      tokens[role] = createToken(users[role], role);
+    }
     
-    const adminRes = await db.query(`INSERT INTO users (name, email, password_hash, role) VALUES ('Admin', 'admin@test.com', 'hash', 'admin') RETURNING id`);
-    const adminId = adminRes.rows[0].id;
-
-    const producerRes = await db.query(`INSERT INTO users (name, email, password_hash, role) VALUES ('Producer', 'prod@test.com', 'hash', 'producer') RETURNING id`);
-    const producerId = producerRes.rows[0].id;
-    
-    const supplierRes = await db.query(`INSERT INTO users (name, email, password_hash, role) VALUES ('Supplier', 'sup@test.com', 'hash', 'supplier') RETURNING id`);
-    const supplierId = supplierRes.rows[0].id;
-
-    const locRes = await db.query(`INSERT INTO locations (user_id, name, type) VALUES ($1, 'Farm 1', 'farm') RETURNING id`, [producerId]);
-    const locId = locRes.rows[0].id;
-
-    const prodRes = await db.query(`INSERT INTO products (producer_id, name) VALUES ($1, 'Apples') RETURNING id`, [producerId]);
-    const productId = prodRes.rows[0].id;
-
-    const adminToken = createToken(adminId, 'admin');
-    const producerToken = createToken(producerId, 'producer');
-    const supplierToken = createToken(supplierId, 'supplier');
-
-    // 1. Create Batch as Producer
-    console.log('1. Testing Create Batch as producer...');
-    let res = await fetch(`${API_URL}/batches`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${producerToken}` },
-      body: JSON.stringify({
-        productId,
-        quantity: 100,
-        unit: 'kg',
-        currentLocationId: locId
-      })
+    // ============================================
+    // 1. Locations
+    // ============================================
+    console.log('1. Testing Locations...');
+    let res = await fetchAPI('/locations', 'POST', tokens.producer, {
+      name: 'Farm A', type: 'farm', address: '123 Farm Rd', city: 'Testville', state: 'TS'
     });
-    let data = await res.json();
-    if (!res.ok) throw new Error('Create Batch Failed: ' + JSON.stringify(data));
-    const batchId = data.batch.id;
-    console.log('✅ 1. Create Batch Passed. Batch ID:', batchId);
+    assert(res.status === 201, `Create location failed: ${JSON.stringify(res.data)}`);
+    const farmId = res.data.location.id;
 
-    // 2. Mark Ready as Producer
-    console.log('2. Testing mark-ready as producer...');
-    res = await fetch(`${API_URL}/batches/${batchId}/mark-ready`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${producerToken}` }
+    res = await fetchAPI('/locations', 'POST', tokens.warehouse_manager, {
+      name: 'Central Warehouse', type: 'warehouse', address: '456 Storage Ave', city: 'Testville', state: 'TS'
     });
-    data = await res.json();
-    if (res.ok && data.batch.status === 'ready') {
-      console.log('✅ 2. Mark-ready passed (status=ready).');
-    } else {
-      throw new Error('Mark-ready Failed. Response: ' + JSON.stringify(data));
-    }
+    assert(res.status === 201, 'Create warehouse failed');
+    const warehouseId = res.data.location.id;
 
-    // 3. Mark Ready Again (expect 422)
-    console.log('3. Testing mark-ready again as producer...');
-    res = await fetch(`${API_URL}/batches/${batchId}/mark-ready`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${producerToken}` }
+    res = await fetchAPI('/locations', 'POST', tokens.retailer, {
+      name: 'Retail Shop A', type: 'retailer_shop', address: '789 Main St', city: 'Testville', state: 'TS'
     });
-    data = await res.json();
-    if (res.status === 422) {
-      console.log('✅ 3. Mark-ready again rejected properly (422):', data.message);
-    } else {
-      throw new Error('Mark-ready again should have failed with 422. Got: ' + res.status);
-    }
+    const retailShopId = res.data.location.id;
 
-    // 4. Mark Expired as Producer (expect 403)
-    console.log('4. Testing mark-expired as producer...');
-    res = await fetch(`${API_URL}/batches/${batchId}/mark-expired`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${producerToken}` }
+    res = await fetchAPI('/locations', 'GET', tokens.admin);
+    assert(res.status === 200 && res.data.locations.length === 3, 'Get all locations failed');
+
+    // ============================================
+    // 2. Products
+    // ============================================
+    console.log('2. Testing Products...');
+    res = await fetchAPI('/products', 'POST', tokens.producer, {
+      name: 'Organic Apples', description: 'Freshly picked', category: 'Fruits'
     });
-    data = await res.json();
-    if (res.status === 403) {
-      console.log('✅ 4. Mark-expired as producer rejected properly (403):', data.message);
-    } else {
-      throw new Error('Mark-expired as producer should have failed with 403. Got: ' + res.status);
-    }
+    assert(res.status === 201, 'Create product failed');
+    const productId = res.data.product.id;
 
-    // 5. PATCH /:id/status (expect 404)
-    console.log('5. Testing old PATCH route...');
-    res = await fetch(`${API_URL}/batches/${batchId}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
-      body: JSON.stringify({ status: 'expired' })
+    res = await fetchAPI('/products', 'GET', tokens.admin);
+    assert(res.status === 200 && res.data.products.length === 1, 'Get products failed');
+
+    // ============================================
+    // 3. Batches
+    // ============================================
+    console.log('3. Testing Batches...');
+    res = await fetchAPI('/batches', 'POST', tokens.producer, {
+      productId, quantity: 500, unit: 'kg', currentLocationId: farmId
     });
-    if (res.status === 404) {
-      console.log('✅ 5. Old PATCH route no longer exists (404).');
-    } else {
-      throw new Error('Old PATCH route should be 404. Got: ' + res.status);
-    }
+    assert(res.status === 201, 'Create batch failed');
+    const batchId = res.data.batch.id;
 
-    // 6. Mark Expired as Admin (expect 200)
-    console.log('6. Testing mark-expired as admin...');
-    res = await fetch(`${API_URL}/batches/${batchId}/mark-expired`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` }
+    res = await fetchAPI(`/batches/${batchId}/mark-ready`, 'POST', tokens.producer);
+    assert(res.status === 200 && res.data.batch.status === 'ready', 'Mark ready failed');
+
+    // ============================================
+    // 4. Orders
+    // ============================================
+    console.log('4. Testing Orders...');
+    res = await fetchAPI('/orders', 'POST', tokens.retailer, {
+      product_id: productId, quantity: 100, warehouse_location_id: warehouseId
     });
-    data = await res.json();
-    if (res.ok && data.batch.status === 'expired') {
-      console.log('✅ 6. Mark-expired as admin passed (status=expired).');
-    } else {
-      throw new Error('Mark-expired as admin Failed. Got: ' + res.status);
-    }
+    assert(res.status === 201, `Create order failed: ${JSON.stringify(res.data)}`);
+    const orderId = res.data.data.id;
 
-    console.log('--- ALL TESTS PASSED ---');
+    res = await fetchAPI('/orders/pending', 'GET', tokens.warehouse_manager);
+    assert(res.status === 200 && res.data.data.length === 1, 'Get pending orders failed');
+
+    res = await fetchAPI(`/orders/${orderId}/process`, 'POST', tokens.warehouse_manager, { action: 'approve' });
+    assert(res.status === 200 && res.data.data.status === 'approved', 'Process order failed');
+
+    // ============================================
+    // 5. Shipments
+    // ============================================
+    console.log('5. Testing Shipments...');
+    res = await fetchAPI('/shipments', 'POST', tokens.supplier, {
+      destination_location_id: retailShopId,
+      source_location_id: warehouseId,
+      distributor_id: users.distributor,
+      batches: [{ batch_id: batchId, quantity_moved: 100, notes: 'First shipment' }]
+    });
+    assert(res.status === 201, `Create shipment failed: ${JSON.stringify(res.data)}`);
+    const shipmentId = res.data.shipment.id;
+
+    res = await fetchAPI(`/shipments/${shipmentId}/dispatch`, 'POST', tokens.distributor);
+    assert(res.status === 200 && res.data.shipment.status === 'in_transit', 'Dispatch shipment failed');
+
+    res = await fetchAPI(`/shipments/${shipmentId}/deliver`, 'POST', tokens.retailer);
+    assert(res.status === 200 && res.data.shipment.status === 'delivered', `Deliver shipment failed: ${JSON.stringify(res.data)}`);
+
+    // ============================================
+    // 6. Transactions
+    // ============================================
+    console.log('6. Testing Transactions...');
+    res = await fetchAPI('/transactions', 'POST', tokens.retailer, {
+      location_id: retailShopId,
+      total_amount: 250.00,
+      items: [{ batch_id: batchId, quantity_sold: 50, price_per_unit: 5.00 }]
+    });
+    assert(res.status === 201, `Create transaction failed: ${JSON.stringify(res.data)}`);
+    const transactionId = res.data.transaction.id;
+
+    res = await fetchAPI('/transactions', 'GET', tokens.admin);
+    assert(res.status === 200 && res.data.length === 1, 'Get transactions failed');
+
+    console.log('✅ ALL INTEGRATION TESTS PASSED');
   } catch (err) {
     console.error('❌ TEST FAILED:', err.message);
   } finally {

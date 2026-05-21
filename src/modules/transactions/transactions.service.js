@@ -1,5 +1,6 @@
 // modules/transactions/transactions.service.js
 const db = require('../../config/db');
+const logInventoryEvent = require('../../utils/logger');
 
 const createTransaction = async ({ retailer_id, location_id, items }) => {
   const client = await db.getClient();

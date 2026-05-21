@@ -54,7 +54,7 @@ const dispatchShipment = async (req, res, next) => {
 
 const deliverShipment = async (req, res, next) => {
   try {
-    const shipment = await shipmentsService.deliverShipment(req.params.id, req.user);
+    const shipment = await shipmentService.deliverShipment(req.params.id, req.user);
     res.status(200).json({ message: 'Shipment delivered', shipment });
   } catch (err) {
     next(err);
@@ -63,7 +63,7 @@ const deliverShipment = async (req, res, next) => {
 
 const cancelShipment = async (req, res, next) => {
   try {
-    const shipment = await shipmentsService.cancelShipment(req.params.id, req.user);
+    const shipment = await shipmentService.cancelShipment(req.params.id, req.user);
     res.status(200).json({ message: 'Shipment cancelled', shipment });
   } catch (err) {
     next(err);

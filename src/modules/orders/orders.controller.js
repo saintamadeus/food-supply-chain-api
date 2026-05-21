@@ -3,8 +3,7 @@ const ordersService = require('./orders.service');
 exports.createOrder = async (req, res) => {
   try {
     const orderData = req.body;
-    // Assuming req.user contains the authenticated retailer
-    // orderData.retailer_id = req.user.id;
+    orderData.retailer_id = req.user.id;
     
     const newOrder = await ordersService.createOrder(orderData);
     res.status(201).json({
