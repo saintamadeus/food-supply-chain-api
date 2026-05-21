@@ -1,0 +1,496 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Food Supply Chain Tracking API",
+    "version": "1.0.0",
+    "description": "Group 17 — Tracks food from producer to consumer"
+  },
+  "servers": [{ "url": "http://localhost:5000/api" }],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register a new user",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name":     { "type": "string", "example": "Ada Obi" },
+                  "email":    { "type": "string", "example": "ada@example.com" },
+                  "password": { "type": "string", "example": "secret123" },
+                  "role":     { "type": "string", "example": "producer", "enum": ["admin","producer","supplier","warehouse_manager","distributor","retailer"] },
+                  "phone":    { "type": "string", "example": "+2348012345678" }
+                },
+                "required": ["name","email","password","role"]
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "User registered" } }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email":    { "type": "string", "example": "ada@example.com" },
+                  "password": { "type": "string", "example": "secret123" }
+                },
+                "required": ["email","password"]
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Returns access and refresh tokens" } }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Refresh access token",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refreshToken": { "type": "string" }
+                },
+                "required": ["refreshToken"]
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Returns new access token" } }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Logout",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refreshToken": { "type": "string" }
+                },
+                "required": ["refreshToken"]
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Logged out" } }
+      }
+    },
+    "/users": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Get all users (admin only)",
+        "responses": { "200": { "description": "List of users" } }
+      }
+    },
+    "/users/{id}": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Get user by ID (admin only)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "User object" } }
+      },
+      "put": {
+        "tags": ["Users"],
+        "summary": "Update user (admin only)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name":  { "type": "string" },
+                  "email": { "type": "string" },
+                  "phone": { "type": "string" },
+                  "role":  { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Updated user" } }
+      },
+      "delete": {
+        "tags": ["Users"],
+        "summary": "Delete user (admin only)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "User deleted" } }
+      }
+    },
+    "/locations": {
+      "post": {
+        "tags": ["Locations"],
+        "summary": "Create a location",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name":    { "type": "string", "example": "Lagos Warehouse" },
+                  "type":    { "type": "string", "example": "warehouse", "enum": ["farm","warehouse","supplier_facility","retailer_shop"] },
+                  "address": { "type": "string", "example": "12 Apapa Rd" },
+                  "city":    { "type": "string", "example": "Lagos" },
+                  "state":   { "type": "string", "example": "Lagos" }
+                },
+                "required": ["name","type","address","city","state"]
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Location created" } }
+      },
+      "get": {
+        "tags": ["Locations"],
+        "summary": "Get all locations (admin, warehouse_manager, supplier)",
+        "responses": { "200": { "description": "List of locations" } }
+      }
+    },
+    "/locations/my": {
+      "get": {
+        "tags": ["Locations"],
+        "summary": "Get my locations",
+        "responses": { "200": { "description": "List of own locations" } }
+      }
+    },
+    "/locations/{id}": {
+      "get": {
+        "tags": ["Locations"],
+        "summary": "Get location by ID",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Location object" } }
+      },
+      "put": {
+        "tags": ["Locations"],
+        "summary": "Update location",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name":    { "type": "string" },
+                  "type":    { "type": "string" },
+                  "address": { "type": "string" },
+                  "city":    { "type": "string" },
+                  "state":   { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Updated location" } }
+      },
+      "delete": {
+        "tags": ["Locations"],
+        "summary": "Delete location",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Location deleted" } }
+      }
+    },
+    "/products": {
+      "post": {
+        "tags": ["Products"],
+        "summary": "Create a product (producer only)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name":        { "type": "string", "example": "Tomatoes" },
+                  "description": { "type": "string", "example": "Fresh red tomatoes" },
+                  "category":    { "type": "string", "example": "vegetable" }
+                },
+                "required": ["name","category"]
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Product created" } }
+      },
+      "get": {
+        "tags": ["Products"],
+        "summary": "Get all products",
+        "responses": { "200": { "description": "List of products" } }
+      }
+    },
+    "/products/my": {
+      "get": {
+        "tags": ["Products"],
+        "summary": "Get my products (producer only)",
+        "responses": { "200": { "description": "List of own products" } }
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "tags": ["Products"],
+        "summary": "Get product by ID",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Product object" } }
+      },
+      "put": {
+        "tags": ["Products"],
+        "summary": "Update product (producer, admin)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name":        { "type": "string" },
+                  "description": { "type": "string" },
+                  "category":    { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Updated product" } }
+      },
+      "delete": {
+        "tags": ["Products"],
+        "summary": "Delete product (producer, admin)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Product deleted" } }
+      }
+    },
+    "/batches": {
+      "post": {
+        "tags": ["Batches"],
+        "summary": "Create a batch (producer, admin)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productId":        { "type": "integer", "example": 1 },
+                  "quantity":         { "type": "number",  "example": 500 },
+                  "unit":             { "type": "string",  "example": "kg", "enum": ["kg","litres","units"] },
+                  "currentLocationId":{ "type": "integer", "example": 2 },
+                  "productionDate":   { "type": "string",  "example": "2026-05-01" },
+                  "expiryDate":       { "type": "string",  "example": "2026-06-01" }
+                },
+                "required": ["productId","quantity","unit"]
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Batch created" } }
+      },
+      "get": {
+        "tags": ["Batches"],
+        "summary": "Get all batches (admin only)",
+        "responses": { "200": { "description": "List of batches" } }
+      }
+    },
+    "/batches/mine": {
+      "get": {
+        "tags": ["Batches"],
+        "summary": "Get my batches",
+        "responses": { "200": { "description": "List of own batches" } }
+      }
+    },
+    "/batches/{id}": {
+      "get": {
+        "tags": ["Batches"],
+        "summary": "Get batch by ID",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Batch object" } }
+      }
+    },
+    "/batches/{id}/mark-ready": {
+      "post": {
+        "tags": ["Batches"],
+        "summary": "Mark batch as ready (producer only) — transition: created → ready",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Batch marked ready" } }
+      }
+    },
+    "/batches/{id}/mark-stored": {
+      "post": {
+        "tags": ["Batches"],
+        "summary": "Mark batch as stored — transition: in_transit → stored",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Batch marked stored" } }
+      }
+    },
+    "/batches/{id}/mark-expired": {
+      "post": {
+        "tags": ["Batches"],
+        "summary": "Mark batch as expired (admin, warehouse_manager)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Batch marked expired" } }
+      }
+    },
+    "/batches/{id}/trail": {
+      "get": {
+        "tags": ["Batches"],
+        "summary": "Get full audit trail for a batch",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Audit trail" } }
+      }
+    },
+    "/shipments": {
+      "post": {
+        "tags": ["Shipments"],
+        "summary": "Create a shipment (supplier, distributor, admin)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "distributor_id":          { "type": "integer", "example": 4 },
+                  "source_location_id":      { "type": "integer", "example": 1 },
+                  "destination_location_id": { "type": "integer", "example": 2 },
+                  "departure_date":          { "type": "string",  "example": "2026-05-12" },
+                  "batches": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "batch_id":       { "type": "integer", "example": 1 },
+                        "quantity_moved": { "type": "number",  "example": 200 },
+                        "notes":          { "type": "string",  "example": "Handle with care" }
+                      },
+                      "required": ["batch_id","quantity_moved"]
+                    }
+                  }
+                },
+                "required": ["source_location_id","destination_location_id","batches"]
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Shipment created" } }
+      },
+      "get": {
+        "tags": ["Shipments"],
+        "summary": "Get all shipments",
+        "responses": { "200": { "description": "List of shipments" } }
+      }
+    },
+    "/shipments/{id}": {
+      "get": {
+        "tags": ["Shipments"],
+        "summary": "Get shipment by ID",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Shipment object" } }
+      }
+    },
+    "/shipments/{id}/status": {
+      "patch": {
+        "tags": ["Shipments"],
+        "summary": "Update shipment status — will be replaced by /dispatch /deliver /cancel in Phase 7",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string", "example": "in_transit", "enum": ["in_transit","delivered","cancelled"] }
+                },
+                "required": ["status"]
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Shipment status updated" } }
+      }
+    },
+    "/transactions": {
+      "post": {
+        "tags": ["Transactions"],
+        "summary": "Create a transaction (retailer, admin)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "location_id": { "type": "integer", "example": 3 },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "batch_id":       { "type": "integer", "example": 1 },
+                        "quantity_sold":  { "type": "number",  "example": 50 },
+                        "price_per_unit": { "type": "number",  "example": 250.00 }
+                      },
+                      "required": ["batch_id","quantity_sold","price_per_unit"]
+                    }
+                  }
+                },
+                "required": ["location_id","items"]
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Transaction created" } }
+      },
+      "get": {
+        "tags": ["Transactions"],
+        "summary": "Get all transactions (retailer, admin)",
+        "responses": { "200": { "description": "List of transactions" } }
+      }
+    },
+    "/transactions/{id}": {
+      "get": {
+        "tags": ["Transactions"],
+        "summary": "Get transaction by ID",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Transaction object" } }
+      }
+    }
+  }
+}
