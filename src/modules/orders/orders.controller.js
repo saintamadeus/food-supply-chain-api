@@ -1,56 +1,56 @@
 const ordersService = require('./orders.service');
 
-exports.createOrder = async (req, res) => {
+const createOrder = async (req, res, next) => {
   try {
-    const orderData = req.body;
-    orderData.retailer_id = req.user.id;
-    
+    const { warehouse_location_id, product_id, quantity } = req.body;
+
+    if (!product_id || !quantity) {
+      return res.status(400).json({ message: 'product_id and quantity are required' });
+    }
+    if (quantity <= 0) {
+      return res.status(400).json({ message: 'quantity must be greater than zero' });
+    }
+
+    const orderData = {
+      retailer_id: req.user.id,
+      warehouse_location_id: warehouse_location_id || null,
+      product_id,
+      quantity,
+    };
+
     const newOrder = await ordersService.createOrder(orderData);
-    res.status(201).json({
-      success: true,
-      message: 'Order created successfully',
-      data: newOrder
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Error creating order'
-    });
+    res.status(201).json({ message: 'Order created successfully', order: newOrder });
+  } catch (err) {
+    next(err);
   }
 };
 
-exports.getPendingOrders = async (req, res) => {
+const getPendingOrders = async (req, res, next) => {
   try {
-    // Possibly filter by warehouse_location_id from req.user
     const orders = await ordersService.getPendingOrders();
-    res.status(200).json({
-      success: true,
-      data: orders
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Error fetching pending orders'
-    });
+    res.status(200).json({ orders });
+  } catch (err) {
+    next(err);
   }
 };
 
-exports.processOrder = async (req, res) => {
+const processOrder = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const { action } = req.body; // 'approve' or 'reject'
-    // warehouse manager id from req.user
-    
-    const processedOrder = await ordersService.processOrder(id, action);
-    res.status(200).json({
-      success: true,
-      message: `Order ${action}ed successfully`,
-      data: processedOrder
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Error processing order'
-    });
+    const { action } = req.body;
+
+    if (!action || !['approve', 'reject'].includes(action)) {
+      return res.status(400).json({ message: "action must be either 'approve' or 'reject'" });
+    }
+
+    const order = await ordersService.processOrder(req.params.id, action);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    res.status(200).json({ message: `Order ${action}d successfully`, order });
+  } catch (err) {
+    next(err);
   }
 };
+
+module.exports = { createOrder, getPendingOrders, processOrder };
